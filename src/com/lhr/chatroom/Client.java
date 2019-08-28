@@ -12,6 +12,7 @@ public class Client implements AutoCloseable {
     private final Socket client;
     private final DataOutputStream os;
     private final BufferedReader is;
+    private final Thread receiveThread;
     BufferedReader reader;
 
 
@@ -20,9 +21,15 @@ public class Client implements AutoCloseable {
         os = new DataOutputStream(client.getOutputStream());
         is = new BufferedReader(new InputStreamReader(client.getInputStream()));
         reader =  new BufferedReader(new InputStreamReader(System.in));
+
+        receiveThread = new Thread(() -> receive());
+        receiveThread.start();
     }
 
-    public void sendReceive() {
+    /**
+     * Loop on input from the console and send it to the server.
+     */
+    public void send() {
         try {
             System.out.println("Connected");
 
@@ -31,18 +38,27 @@ public class Client implements AutoCloseable {
                 String msg = reader.readLine();
                 os.writeBytes(msg + "\n");
                 os.flush();
+            }
+        } catch (UnknownHostException e) {
+            System.err.println("Don't know about host: hostname");
+        } catch (IOException e) {
+            System.out.println(e);
+        }
+    }
 
-                // keep on reading from/to the socket till we receive the "Ok" from Server,
-                // once we received that we break.
+    /**
+     * Spin on the input stream, read off messages, and print them to the console.
+     */
+    public void receive() {
+        try {
+            while (true) {
                 String responseLine = is.readLine();
 
                 if (responseLine != null && responseLine.equals("Ok")) {
                     return;
                 }
 
-                if (responseLine != null) {
-                    System.out.println("< " + responseLine);
-                }
+                System.out.println(responseLine);
             }
         } catch (UnknownHostException e) {
             System.err.println("Don't know about host: hostname");
@@ -62,7 +78,7 @@ public class Client implements AutoCloseable {
         System.out.println("Connecting to server");
 
         try (Client client = new Client(host, port)) {
-            client.sendReceive();
+            client.send();
         } catch (UnknownHostException e) {
             e.printStackTrace();
         } catch (IOException e) {
