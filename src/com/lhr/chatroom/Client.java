@@ -6,85 +6,106 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.net.Socket;
 import java.net.UnknownHostException;
-import java.util.stream.Stream;
 
-public class Client implements AutoCloseable {
-    private final Socket client;
-    private final DataOutputStream os;
-    private final BufferedReader is;
-    private final Thread receiveThread;
-    BufferedReader reader;
+/**
+ * Class that implements a basic echo client.
+ * By default, looks for a server at localhost:8080 (see main()).
+ */
+public class Client implements AutoCloseable
+{
+    private final DataOutputStream fToServer;
+    private final BufferedReader fFromServer;
 
+    public Client( String host, int port ) throws IOException
+    {
+        Socket serverConnection = new Socket( host, port );
+        fToServer = new DataOutputStream( serverConnection.getOutputStream() );
+        fFromServer = new BufferedReader( new InputStreamReader( serverConnection.getInputStream() ) );
 
-    public Client(String host, int port) throws UnknownHostException, IOException {
-        client = new Socket(host, port);
-        os = new DataOutputStream(client.getOutputStream());
-        is = new BufferedReader(new InputStreamReader(client.getInputStream()));
-        reader =  new BufferedReader(new InputStreamReader(System.in));
-
-        receiveThread = new Thread(() -> receive());
+        Thread receiveThread = new Thread( this::receive );
+        receiveThread.setDaemon( true );
         receiveThread.start();
     }
 
     /**
      * Loop on input from the console and send it to the server.
      */
-    public void send() {
-        try {
-            System.out.println("Connected");
+    private void send()
+    {
+        try
+        {
+            System.out.println( "Connected" );
 
-            while (true) {
-                System.out.print("> ");
-                String msg = reader.readLine();
-                os.writeBytes(msg + "\n");
-                os.flush();
+            String msg;
+            do
+            {
+                System.out.print( "> " );
+                msg = System.console().readLine();
+                fToServer.writeBytes( msg + "\n" );
+                fToServer.flush();
             }
-        } catch (UnknownHostException e) {
-            System.err.println("Don't know about host: hostname");
-        } catch (IOException e) {
-            System.out.println(e);
+            while ( !msg.equalsIgnoreCase( "quit" ) );
+        }
+        catch ( UnknownHostException e )
+        {
+            System.err.println( "Don't know about host: hostname" );
+        }
+        catch ( IOException e )
+        {
+            System.out.println( "IO Exception: " + e.getMessage() );
         }
     }
 
     /**
      * Spin on the input stream, read off messages, and print them to the console.
      */
-    public void receive() {
-        try {
-            while (true) {
-                String responseLine = is.readLine();
+    private void receive()
+    {
+        try
+        {
+            while ( true )
+            {
+                String responseLine = fFromServer.readLine();
 
-                if (responseLine != null && responseLine.equals("Ok")) {
+                if ( responseLine != null && responseLine.equals( "Ok" ) )
+                {
                     return;
                 }
 
-                System.out.println(responseLine);
+                System.out.println( " << " + responseLine );
             }
-        } catch (UnknownHostException e) {
-            System.err.println("Don't know about host: hostname");
-        } catch (IOException e) {
-            System.out.println(e);
+        }
+        catch ( UnknownHostException e )
+        {
+            System.err.println( "Don't know about host: " + e.getMessage() );
+        }
+        catch ( IOException e )
+        {
+            System.out.println( "IO Exception: " + e.getMessage() );
         }
     }
 
-    public void close() throws IOException {
-        is.close();
-        os.close();
+    @Override
+    public void close() throws IOException
+    {
+        fFromServer.close();
+        fToServer.close();
     }
 
-    public static void main(String[] args) throws UnknownHostException, IOException, InterruptedException {
-        int port = 8080;
-        String host = "localhost";
-        System.out.println("Connecting to server");
+    public static void main( String[] args )
+    {
+        final int port = 8080;
+        final String host = "localhost";
+        System.out.println( "Connecting to server" );
 
-        try (Client client = new Client(host, port)) {
+        try ( Client client = new Client( host, port ) )
+        {
             client.send();
-        } catch (UnknownHostException e) {
-            e.printStackTrace();
-        } catch (IOException e) {
+        }
+        catch ( IOException e )
+        {
             e.printStackTrace();
         }
-
-        System.out.println("Done");
+        System.out.println( "Done" );
     }
 }

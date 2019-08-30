@@ -7,64 +7,91 @@ import java.io.PrintStream;
 import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
-import java.net.UnknownHostException;
 
-public class Server implements AutoCloseable {
-    private final ServerSocket server;
+/**
+ * Class that implements a basic echo server.
+ * By default, listed on localhost:8080 (see main()).
+ */
+public class Server implements AutoCloseable
+{
+    private final ServerSocket fListener;
 
-    public Server(String host, int port, int backlogConnectionQueueLength) throws UnknownHostException, IOException {
-        server = new ServerSocket(port, backlogConnectionQueueLength, InetAddress.getByName(host));
-        System.out.println(Thread.currentThread() + " Created Server");
+    public Server( String host, int port, int backlogConnectionQueueLength ) throws IOException
+    {
+        fListener = new ServerSocket( port, backlogConnectionQueueLength, InetAddress.getByName( host ) );
+        System.out.println( Thread.currentThread() + " Created Server" );
     }
 
-    public void start() {
-        System.out.println("Started");
+    private void start()
+    {
+        System.out.println( "Started" );
 
-        while (true) {
-            acceptAndHandleClient(server);
-        }
-    }
-
-    private void acceptAndHandleClient(ServerSocket server) {
-        try (Socket clientSocket = server.accept()) {
-            handleNewClient(clientSocket);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private void handleNewClient(Socket clientSocket) throws IOException {
-        System.out.println(Thread.currentThread() + " Received Connection from " + clientSocket);
-        BufferedReader is = new BufferedReader(new InputStreamReader(clientSocket.getInputStream()));
-        PrintStream os = new PrintStream(clientSocket.getOutputStream());
-        // echo that data back to the client, except for QUIT.
-
-        String line = null;
-
-        while ((line = is.readLine()) != null) {
-            if (line.equalsIgnoreCase("QUIT"))
-                break;
-            else {
-                os.println(line);
-                os.flush();
+        try
+        {
+            while ( true )
+            {
+                Socket clientSocket = fListener.accept();
+                ( new Thread( () -> handleNewClient( clientSocket ) ) ).start();
             }
         }
-
-        os.println("Ok");
-        os.flush();
-        is.close();
-        os.close();
+        catch ( IOException ex )
+        {
+            ex.printStackTrace();
+        }
     }
 
-    public void close() throws IOException {
-        server.close();
+    private void handleNewClient( Socket clientSocket )
+    {
+        try
+        {
+            System.out.println( Thread.currentThread() + " Received Connection from " + clientSocket );
+            BufferedReader is = new BufferedReader( new InputStreamReader( clientSocket.getInputStream() ) );
+            PrintStream os = new PrintStream( clientSocket.getOutputStream() );
+            // echo that data back to the client, except for QUIT.
+
+            String line;
+
+            while ( ( line = is.readLine() ) != null )
+            {
+                if ( line.equalsIgnoreCase( "quit" ) )
+                {
+                    break;
+                }
+                else
+                {
+                    os.println( line );
+                    os.flush();
+                }
+            }
+
+            os.println( "Ok" );
+            os.flush();
+            is.close();
+            os.close();
+        }
+        catch ( IOException ex )
+        {
+            System.out.println( "Exception while reading from a client: " + ex.getMessage() );
+        }
+
+        System.out.println( "Exiting client handler: " + clientSocket );
     }
 
-    public static void main(String[] args) {
-        try (Server server = new Server("localhost", 8080, 50)) {
+    @Override
+    public void close() throws IOException
+    {
+        fListener.close();
+    }
+
+    public static void main( String[] args )
+    {
+        try ( Server server = new Server( "localhost", 8080, 50 ) )
+        {
             server.start();
-        } catch (IOException e) {
-            System.out.println(e);
+        }
+        catch ( IOException e )
+        {
+            System.out.println( "IOException found: " + e.getMessage() );
         }
     }
 }
